@@ -1,105 +1,75 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>E.D.I.T.H. // VR Iron Man HUD</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mobile Back Camera Preview</title>
     <style>
-        body, html {
-            margin: 0;
-            padding: 0;
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            background-color: #121212;
+            color: #ffffff;
+            margin-top: 30px;
+            padding: 0 15px;
+        }
+        video {
             width: 100%;
-            height: 100%;
+            max-width: 500px;
+            border: 2px solid #ffffff;
+            border-radius: 8px;
             background: #000;
-            overflow: hidden;
-            font-family: 'Courier New', Courier, monospace;
         }
-        .vr-container {
-            display: flex;
-            width: 100vw;
-            height: 100vh;
-        }
-        .eye-viewport {
-            position: relative;
-            width: 50vw;
-            height: 100vh;
-            overflow: hidden;
-            border-right: 2px solid #111;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-        img {
-            width: 50vw;
-            height: 100vh;
-            object-fit: cover;
-        }
-        .overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
-            box-sizing: border-box;
-            border: 15px solid rgba(0, 200, 255, 0.15);
-            box-shadow: inset 0 0 30px rgba(0, 200, 255, 0.4);
-        }
-        .hud-element {
-            position: absolute;
-            color: #00ffff;
-            font-size: 10px;
-            text-shadow: 0 0 6px #00ffff;
-            letter-spacing: 1px;
-        }
-        .top-left { top: 20px; left: 20px; border-left: 2px solid #00ffff; padding-left: 8px; }
-        .top-right { top: 20px; right: 20px; text-align: right; border-right: 2px solid #00ffff; padding-right: 8px; }
-        .bottom-left { bottom: 20px; left: 20px; }
-        .bottom-right { bottom: 20px; right: 20px; text-align: right; }
-        
-        .reticle {
-            position: absolute;
-            width: 100px;
-            height: 100px;
-            border: 1px dashed rgba(0, 255, 255, 0.5);
-            border-radius: 50%;
-            top: calc(50% - 50px);
-            left: calc(50% - 50px);
-            animation: spin 10s linear infinite;
-        }
-        .reticle-inner {
-            position: absolute;
-            width: 30px;
-            height: 30px;
-            border: 2px solid #00ffff;
-            top: calc(50% - 15px);
-            left: calc(50% - 15px);
-        }
-        @keyframes spin { 100% { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
-    <div class="vr-container">
-        <!-- Left Eye -->
-        <div class="eye-viewport">
-            <img src="/video_feed" />
-            <div class="overlay">
-                <div class="hud-element top-left">SYS.IO: ACTIVE<br>PWR: 98.4%</div>
-                <div class="hud-element top-right">MARK LXXXV<br>VR LINK ON</div>
-                <div class="hud-element bottom-left">LAT: 37.7749</div>
-                <div class="hud-element bottom-right">AI: E.D.I.T.H.</div>
-                <div class="reticle"><div class="reticle-inner"></div></div>
-            </div>
-        </div>
-        <!-- Right Eye -->
-        <div class="eye-viewport">
-            <img src="/video_feed" />
-            <div class="overlay">
-                <div class="hud-element top-left">SYS.IO: ACTIVE<br>PWR: 98.4%</div>
-                <div class="hud-element top-right">MARK LXXXV<br>VR LINK ON</div>
-                <div class="hud-element bottom-left">LAT: 37.7749</div>
-                <div class="hud-element bottom-right">AI: E.D.I.T.H.</div>
-                <div class="reticle"><div class="reticle-inner"></div></div>
-            </div>
-        </div>
-    </div>
+
+    <h1>Back Camera Preview</h1>
+    <!-- Video element to display camera stream -->
+    <video id="camera-stream" autoplay playsinline></video>
+
+    <script>
+        async function startBackCamera() {
+            const videoElement = document.getElementById('camera-stream');
+            
+            try {
+                // Try forcing the back/environment camera first
+                const constraints = {
+                    video: {
+                        facingMode: { exact: "environment" }
+                    }
+                };
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                videoElement.srcObject = stream;
+            } catch (error) {
+                console.warn("Exact back camera not found, falling back to general environment preference: ", error);
+                
+                try {
+                    // Fallback to general environment preference without 'exact' restriction
+                    const fallbackConstraints = {
+                        video: {
+                            facingMode: "environment"
+                        }
+                    };
+                    const stream = await navigator.mediaDevices.getUserMedia(fallbackConstraints);
+                    videoElement.srcObject = stream;
+                } catch (fallbackError) {
+                    console.error("Environment camera failed, trying any available camera: ", error);
+                    
+                    try {
+                        // Last resort fallback to any camera available
+                        const anyStream = await navigator.mediaDevices.getUserMedia({ video: true });
+                        videoElement.srcObject = anyStream;
+                    } catch (finalError) {
+                        alert("Could not access any camera. Please check permissions and ensure you are using HTTPS or Localhost.");
+                    }
+                }
+            }
+        }
+
+        // Run the function when the page loads
+        startBackCamera();
+    </script>
+
 </body>
 </html>
