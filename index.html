@@ -3,73 +3,167 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mobile Back Camera Preview</title>
+    <title>Conditional Hand Tracking Preview</title>
+    
+    <!-- MediaPipe Hands CDN Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
     <style>
         body {
+            margin: 0;
+            padding: 0;
+            background-color: #0b0b0b;
             font-family: Arial, sans-serif;
-            text-align: center;
-            background-color: #121212;
             color: #ffffff;
-            margin-top: 30px;
-            padding: 0 15px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
         }
-        video {
+
+        h2 {
+            margin: 10px 0;
+            font-size: 1.2rem;
+        }
+
+        /* Container to keep video and UI aligned */
+        .camera-container {
+            position: relative;
             width: 100%;
-            max-width: 500px;
-            border: 2px solid #ffffff;
-            border-radius: 8px;
+            max-width: 450px;
+            aspect-ratio: 9 / 16;
             background: #000;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
+
+        /* Video feed */
+        video {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transform: scaleX(-1); /* Mirror view */
+        }
+
+        canvas {
+            display: none;
+        }
+
+        /* Mini screen overlay (Hidden by default until hand is detected) */
+        .info-overlay {
+            position: absolute;
+            bottom: 15px;
+            left: 15px;
+            right: 15px;
+            background: rgba(0, 0, 0, 0.8);
+            border: 1px solid rgba(0, 255, 204, 0.4);
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            backdrop-filter: blur(4px);
+            z-index: 10;
+            display: none; /* Hidden initially */
+        }
+
+        .info-title {
+            font-weight: bold;
+            color: #00ffcc;
+            margin-bottom: 4px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            padding-bottom: 2px;
+        }
+
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            margin: 2px 0;
         }
     </style>
 </head>
 <body>
 
-    <h1>Back Camera Preview</h1>
-    <!-- Video element to display camera stream -->
-    <video id="camera-stream" autoplay playsinline></video>
+    <h2>Conditional Hand Tracking</h2>
+
+    <div class="camera-container">
+        <video id="webcam" autoplay playsinline></video>
+        <canvas id="output_canvas"></canvas>
+        
+        <!-- Mini popup data screen (Only shows when hand is placed) -->
+        <div id="info-overlay" class="info-overlay">
+            <div class="info-title">Hand Analysis Panel</div>
+            <div class="info-row"><span>Status:</span> <span style="color: #00ffcc;">Hand Detected</span></div>
+            <div class="info-row"><span>Side:</span> <span id="hand-side">-</span></div>
+            <div class="info-row"><span>Fingers Up:</span> <span id="finger-count">-</span></div>
+        </div>
+    </div>
 
     <script>
-        async function startBackCamera() {
-            const videoElement = document.getElementById('camera-stream');
-            
-            try {
-                // Try forcing the back/environment camera first
-                const constraints = {
-                    video: {
-                        facingMode: { exact: "environment" }
-                    }
-                };
-                const stream = await navigator.mediaDevices.getUserMedia(constraints);
-                videoElement.srcObject = stream;
-            } catch (error) {
-                console.warn("Exact back camera not found, falling back to general environment preference: ", error);
-                
-                try {
-                    // Fallback to general environment preference without 'exact' restriction
-                    const fallbackConstraints = {
-                        video: {
-                            facingMode: "environment"
-                        }
-                    };
-                    const stream = await navigator.mediaDevices.getUserMedia(fallbackConstraints);
-                    videoElement.srcObject = stream;
-                } catch (fallbackError) {
-                    console.error("Environment camera failed, trying any available camera: ", error);
-                    
-                    try {
-                        // Last resort fallback to any camera available
-                        const anyStream = await navigator.mediaDevices.getUserMedia({ video: true });
-                        videoElement.srcObject = anyStream;
-                    } catch (finalError) {
-                        alert("Could not access any camera. Please check permissions and ensure you are using HTTPS or Localhost.");
+        const videoElement = document.getElementById('webcam');
+        const infoOverlay = document.getElementById('info-overlay');
+        const handSideText = document.getElementById('hand-side');
+        const fingerCountText = document.getElementById('finger-count');
+
+        function onResults(results) {
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                // Show mini screen when hand is present
+                infoOverlay.style.display = "block";
+
+                // Get Handedness (Left or Right)
+                let handednessVal = results.multiHandedness[0].label; 
+                handSideText.innerText = handednessVal;
+
+                const landmarks = results.multiHandLandmarks[0];
+
+                // Calculate extended fingers
+                let fingersUp = 0;
+                const tips = [4, 8, 12, 16, 20]; 
+                const pips = [3, 6, 10, 14, 18]; 
+
+                for (let f = 1; f < 5; f++) {
+                    if (landmarks[tips[f]].y < landmarks[pips[f]].y) {
+                        fingersUp++;
                     }
                 }
+                fingerCountText.innerText = fingersUp + " approx";
+            } else {
+                // Hide mini screen completely when no hand is placed
+                infoOverlay.style.display = "none";
             }
         }
 
-        // Run the function when the page loads
-        startBackCamera();
-    </script>
+        const hands = new Hands({
+            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+        });
 
+        hands.setOptions({
+            maxNumHands: 1,
+            modelComplexity: 1,
+            minDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.5
+        });
+
+        hands.onResults(onResults);
+
+        const camera = new Camera(videoElement, {
+            onFrame: async () => {
+                await hands.send({image: videoElement});
+            },
+            width: 640,
+            height: 480,
+            facingMode: "environment" // Targets mobile back camera
+        });
+
+        camera.start().catch(err => {
+            alert("Camera initialization error. Please check permissions or run via localhost/HTTPS.");
+        });
+    </script>
 </body>
 </html>
