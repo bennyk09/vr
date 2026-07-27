@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Conditional Hand Tracking Preview</title>
+    <title>Landscape Exact Camera Hand Tracking</title>
     
     <!-- MediaPipe Hands CDN Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
@@ -30,19 +30,19 @@
             font-size: 1.2rem;
         }
 
-        /* Container to keep video and UI aligned */
+        /* Landscape container layout */
         .camera-container {
             position: relative;
-            width: 100%;
-            max-width: 450px;
-            aspect-ratio: 9 / 16;
+            width: 90%;
+            max-width: 800px;
+            aspect-ratio: 16 / 9;
             background: #000;
             border-radius: 12px;
             overflow: hidden;
             box-shadow: 0 4px 15px rgba(0,0,0,0.5);
         }
 
-        /* Video feed */
+        /* Video feed in landscape and exact orientation (transform scaleX removed) */
         video {
             position: absolute;
             top: 0;
@@ -50,7 +50,6 @@
             width: 100%;
             height: 100%;
             object-fit: cover;
-            transform: scaleX(-1); /* Mirror view */
         }
 
         canvas {
@@ -62,7 +61,6 @@
             position: absolute;
             bottom: 15px;
             left: 15px;
-            right: 15px;
             background: rgba(0, 0, 0, 0.8);
             border: 1px solid rgba(0, 255, 204, 0.4);
             padding: 12px;
@@ -71,6 +69,7 @@
             backdrop-filter: blur(4px);
             z-index: 10;
             display: none; /* Hidden initially */
+            min-width: 200px;
         }
 
         .info-title {
@@ -90,7 +89,7 @@
 </head>
 <body>
 
-    <h2>Conditional Hand Tracking</h2>
+    <h2>Landscape Exact Hand Tracking</h2>
 
     <div class="camera-container">
         <video id="webcam" autoplay playsinline></video>
@@ -156,9 +155,9 @@
             onFrame: async () => {
                 await hands.send({image: videoElement});
             },
-            width: 640,
-            height: 480,
-            facingMode: "environment" // Targets mobile back camera
+            width: 1280,
+            height: 720,
+            facingMode: "environment"
         });
 
         camera.start().catch(err => {
