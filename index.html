@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Dual Hand AR Tracker - Optimized</title>
+    <title>Dual Hand AR Tracker - HD</title>
     
     <!-- MediaPipe Hands CDN Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
@@ -53,7 +53,7 @@
 <body>
 
     <video id="camera-feed" autoplay playsinline></video>
-    <button id="start-btn">Tap to Start AI Camera</button>
+    <button id="start-btn">Tap to Start HD AI Camera</button>
     
     <div id="hud-panel">
         <div class="hud-title">AI System Active</div>
@@ -78,24 +78,22 @@
                 for (let i = 0; i < results.multiHandLandmarks.length; i++) {
                     const landmarks = results.multiHandLandmarks[i];
                     
-                    // --- FIX 1: INVERT LEFT AND RIGHT ---
+                    // Invert Left and Right for back camera
                     let rawSide = results.multiHandedness[i].label;
                     let handSide = (rawSide === "Left") ? "Right" : "Left";
 
                     let fingersUp = 0;
 
-                    // --- FIX 2: THUMB DETECTION (Uses X-axis) ---
-                    // On a back camera, a right hand's thumb points left (lower X value)
-                    // A left hand's thumb points right (higher X value)
+                    // Thumb Detection (X-axis)
                     if (handSide === "Right") {
                         if (landmarks[4].x < landmarks[3].x) fingersUp++;
                     } else {
                         if (landmarks[4].x > landmarks[3].x) fingersUp++;
                     }
 
-                    // --- OTHER 4 FINGERS (Uses Y-axis) ---
-                    const tips = [8, 12, 16, 20]; // Index, Middle, Ring, Pinky Tips
-                    const pips = [6, 10, 14, 18]; // Index, Middle, Ring, Pinky Knuckles
+                    // Other 4 Fingers (Y-axis)
+                    const tips = [8, 12, 16, 20]; 
+                    const pips = [6, 10, 14, 18]; 
 
                     for (let f = 0; f < 4; f++) {
                         if (landmarks[tips[f]].y < landmarks[pips[f]].y) {
@@ -119,6 +117,7 @@
             locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
         });
 
+        // Keeping AI on Lite mode (0) so it doesn't lag the HD feed
         hands.setOptions({
             maxNumHands: 2,
             modelComplexity: 0, 
@@ -139,14 +138,13 @@
                     catch (err) { console.warn("Orientation lock failed.", err); }
                 }
 
-                // --- FIX 3: LOWER AI RESOLUTION FOR SPEED ---
-                // Lowering the width/height here speeds up the AI drastically on mobile
+                // --- CAMERA QUALITY RESTORED TO HD ---
                 const camera = new Camera(videoElement, {
                     onFrame: async () => {
                         await hands.send({image: videoElement});
                     },
-                    width: 320,  // Changed from 640
-                    height: 240, // Changed from 480
+                    width: 1280,  // Restored to HD
+                    height: 720,  // Restored to HD
                     facingMode: "environment" 
                 });
 
