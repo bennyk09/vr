@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Full Screen Camera Preview</title>
+    <title>Landscape Fullscreen Camera</title>
     
     <style>
-        /* Reset margins and prevent any scrolling */
+        /* Reset all margins and prevent scrolling */
         body, html {
             margin: 0;
             padding: 0;
@@ -19,15 +19,19 @@
             align-items: center;
         }
 
-        /* Make the video fill the entire viewport edge-to-edge */
+        /* 
+           Video fills the entire screen. 
+           Notice there is NO "transform: scaleX(-1)" here, so it will not mirror.
+        */
         video {
             position: absolute;
             top: 0;
             left: 0;
             width: 100vw;
             height: 100vh;
-            object-fit: cover; /* Ensures no black borders; fills the screen completely */
+            object-fit: cover;
             z-index: 1;
+            display: none; /* Hidden until started */
         }
 
         /* The UI Button */
@@ -49,12 +53,12 @@
         /* Error Messaging */
         #error-msg {
             position: absolute;
-            z-index: 10;
+            z-index: 15;
             color: #ff4444;
             font-family: Arial, sans-serif;
             font-size: 18px;
             text-align: center;
-            background: rgba(0, 0, 0, 0.8);
+            background: rgba(0, 0, 0, 0.9);
             padding: 15px;
             border-radius: 8px;
             display: none;
@@ -63,7 +67,7 @@
 </head>
 <body>
 
-    <!-- playsinline is crucial for iOS Safari so it doesn't open the native video player -->
+    <!-- playsinline prevents iOS from opening its native media player -->
     <video id="camera-feed" autoplay playsinline></video>
     
     <button id="start-btn">Tap to Start Camera</button>
@@ -74,38 +78,43 @@
         const startBtn = document.getElementById('start-btn');
         const errorMsg = document.getElementById('error-msg');
 
-        async function startCamera() {
-            try {
-                // Request the mobile device's back camera
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: "environment" } 
-                });
-                videoElement.srcObject = stream;
-            } catch (err) {
-                errorMsg.style.display = "block";
-                errorMsg.innerHTML = "Camera Error: " + err.message + "<br><br>Ensure you are connecting via <strong>https://</strong>";
-                console.error(err);
-            }
-        }
-
-        // Mobile browsers require a physical tap to trigger Fullscreen mode
         startBtn.addEventListener('click', async () => {
-            // Hide button on click
-            startBtn.style.display = 'none';
-            
-            // 1. Boot up the camera
-            await startCamera();
-
-            // 2. Request immersive full screen (hides browser UI)
             try {
+                // 1. Request Immersive Full Screen First
                 const docElm = document.documentElement;
                 if (docElm.requestFullscreen) {
                     await docElm.requestFullscreen();
-                } else if (docElm.webkitRequestFullscreen) { /* iOS Safari support */
+                } else if (docElm.webkitRequestFullscreen) { /* iOS Safari fallback */
                     await docElm.webkitRequestFullscreen();
                 }
+
+                // 2. Lock Screen to Landscape
+                // Note: The Fullscreen API must be triggered before the Orientation API works
+                if (screen.orientation && screen.orientation.lock) {
+                    try {
+                        await screen.orientation.lock('landscape');
+                    } catch (err) {
+                        console.warn("Orientation lock not supported or blocked on this device.", err);
+                    }
+                }
+
+                // 3. Start the Unmirrored Back Camera
+                if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                    const stream = await navigator.mediaDevices.getUserMedia({
+                        video: { facingMode: "environment" } // "environment" targets the true back camera
+                    });
+                    
+                    videoElement.srcObject = stream;
+                    videoElement.style.display = 'block'; // Reveal the video
+                    startBtn.style.display = 'none';      // Hide the button
+                } else {
+                    throw new Error("Camera API not supported in this browser.");
+                }
+
             } catch (err) {
-                console.warn("Fullscreen API is not supported on this browser.", err);
+                errorMsg.style.display = "block";
+                errorMsg.innerHTML = "Error: " + err.message + "<br><br>Make sure you are using <strong>https://</strong>";
+                console.error(err);
             }
         });
     </script>
