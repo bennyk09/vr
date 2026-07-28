@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Dual Hand AR Tracker - HD</title>
+    <title>AR Object Detector</title>
     
-    <!-- MediaPipe Hands CDN Scripts -->
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    <!-- TensorFlow.js and COCO-SSD Object Detection Models -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd" crossorigin="anonymous"></script>
 
     <style>
         body, html {
@@ -24,27 +24,37 @@
 
         #start-btn {
             position: absolute; z-index: 20; padding: 20px 40px; font-size: 22px;
-            background-color: #00ffcc; color: black; border: none; border-radius: 12px;
-            font-weight: bold; cursor: pointer; box-shadow: 0 4px 15px rgba(0, 255, 204, 0.5);
+            background-color: #ffcc00; color: black; border: none; border-radius: 12px;
+            font-weight: bold; cursor: pointer; box-shadow: 0 4px 15px rgba(255, 204, 0, 0.5);
         }
 
         #hud-panel {
             position: absolute; top: 20px; left: 20px; z-index: 10;
-            background: rgba(0, 0, 0, 0.7); border: 2px solid #00ffcc;
+            background: rgba(0, 0, 0, 0.7); border: 2px solid #ffcc00;
             padding: 15px; border-radius: 10px; color: white;
-            backdrop-filter: blur(5px); display: none; min-width: 200px;
+            backdrop-filter: blur(5px); display: none; min-width: 250px;
         }
 
         .hud-title {
-            font-size: 18px; font-weight: bold; color: #00ffcc; margin-bottom: 10px;
+            font-size: 18px; font-weight: bold; color: #ffcc00; margin-bottom: 10px;
             border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 5px;
         }
 
-        .hand-data { margin-bottom: 8px; font-size: 16px; }
-        .hand-data span { font-weight: bold; color: #ffcc00; }
+        .object-data { 
+            margin-bottom: 8px; font-size: 16px; text-transform: capitalize;
+        }
+        
+        .object-data span { 
+            font-weight: bold; color: #00ffcc; 
+        }
+
+        #loading-text {
+            position: absolute; z-index: 25; color: white; font-size: 20px;
+            font-weight: bold; display: none; text-shadow: 0 2px 5px black;
+        }
 
         #error-msg {
-            position: absolute; z-index: 25; color: #ff4444; font-size: 18px;
+            position: absolute; z-index: 30; color: #ff4444; font-size: 18px;
             text-align: center; background: rgba(0, 0, 0, 0.9);
             padding: 15px; border-radius: 8px; display: none;
         }
@@ -53,11 +63,12 @@
 <body>
 
     <video id="camera-feed" autoplay playsinline></video>
-    <button id="start-btn">Tap to Start HD AI Camera</button>
+    <button id="start-btn">Tap to Start Object Scanner</button>
+    <div id="loading-text">Loading AI Model... Please wait.</div>
     
     <div id="hud-panel">
-        <div class="hud-title">AI System Active</div>
-        <div id="hand-list"></div>
+        <div class="hud-title">AI Object Scanner Active</div>
+        <div id="object-list">Scanning...</div>
     </div>
 
     <div id="error-msg"></div>
@@ -67,95 +78,90 @@
         const startBtn = document.getElementById('start-btn');
         const errorMsg = document.getElementById('error-msg');
         const hudPanel = document.getElementById('hud-panel');
-        const handList = document.getElementById('hand-list');
+        const objectList = document.getElementById('object-list');
+        const loadingText = document.getElementById('loading-text');
 
-        function onResults(results) {
-            handList.innerHTML = ""; 
+        let aiModel = null;
+        let isDetecting = false;
 
-            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-                hudPanel.style.display = "block";
+        // --- 1. THE OBJECT DETECTION LOOP ---
+        async function detectObjects() {
+            if (!isDetecting) return;
 
-                for (let i = 0; i < results.multiHandLandmarks.length; i++) {
-                    const landmarks = results.multiHandLandmarks[i];
+            // Only run detection if the video has loaded enough data
+            if (videoElement.readyState >= 2) {
+                // Get predictions from the TensorFlow model
+                const predictions = await aiModel.detect(videoElement);
+                
+                objectList.innerHTML = ""; // Clear previous data
+
+                if (predictions.length > 0) {
+                    hudPanel.style.display = "block";
                     
-                    // Invert Left and Right for back camera
-                    let rawSide = results.multiHandedness[i].label;
-                    let handSide = (rawSide === "Left") ? "Right" : "Left";
-
-                    let fingersUp = 0;
-
-                    // Thumb Detection (X-axis)
-                    if (handSide === "Right") {
-                        if (landmarks[4].x < landmarks[3].x) fingersUp++;
-                    } else {
-                        if (landmarks[4].x > landmarks[3].x) fingersUp++;
-                    }
-
-                    // Other 4 Fingers (Y-axis)
-                    const tips = [8, 12, 16, 20]; 
-                    const pips = [6, 10, 14, 18]; 
-
-                    for (let f = 0; f < 4; f++) {
-                        if (landmarks[tips[f]].y < landmarks[pips[f]].y) {
-                            fingersUp++;
-                        }
-                    }
-
-                    // Output to HUD
-                    handList.innerHTML += `
-                        <div class="hand-data">
-                            ${handSide} Hand: <span>${fingersUp} Fingers</span>
-                        </div>
-                    `;
+                    predictions.forEach(prediction => {
+                        // Math to convert decimal confidence to a percentage (e.g. 0.95 -> 95%)
+                        const score = Math.round(prediction.score * 100);
+                        
+                        objectList.innerHTML += `
+                            <div class="object-data">
+                                Object: <span>${prediction.class}</span> <br>
+                                Confidence: ${score}%
+                            </div>
+                        `;
+                    });
+                } else {
+                    objectList.innerHTML = "No known objects detected...";
                 }
-            } else {
-                hudPanel.style.display = "none"; 
             }
+
+            // Loop this function for real-time scanning (using requestAnimationFrame for smooth UI)
+            requestAnimationFrame(detectObjects);
         }
 
-        const hands = new Hands({
-            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
-        });
-
-        // Keeping AI on Lite mode (0) so it doesn't lag the HD feed
-        hands.setOptions({
-            maxNumHands: 2,
-            modelComplexity: 0, 
-            minDetectionConfidence: 0.5,
-            minTrackingConfidence: 0.5
-        });
-
-        hands.onResults(onResults);
-
+        // --- 2. CAMERA & FULLSCREEN INITIALIZATION ---
         startBtn.addEventListener('click', async () => {
+            startBtn.style.display = 'none';
+            loadingText.style.display = 'block';
+
             try {
+                // 1. Request Fullscreen
                 const docElm = document.documentElement;
                 if (docElm.requestFullscreen) await docElm.requestFullscreen();
                 else if (docElm.webkitRequestFullscreen) await docElm.webkitRequestFullscreen();
 
+                // 2. Lock Landscape
                 if (screen.orientation && screen.orientation.lock) {
                     try { await screen.orientation.lock('landscape'); } 
                     catch (err) { console.warn("Orientation lock failed.", err); }
                 }
 
-                // --- CAMERA QUALITY RESTORED TO HD ---
-                const camera = new Camera(videoElement, {
-                    onFrame: async () => {
-                        await hands.send({image: videoElement});
-                    },
-                    width: 1280,  // Restored to HD
-                    height: 720,  // Restored to HD
-                    facingMode: "environment" 
+                // 3. Start HD Camera
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { 
+                        facingMode: "environment",
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    }
                 });
-
-                await camera.start();
                 
-                videoElement.style.display = 'block'; 
-                startBtn.style.display = 'none';
+                videoElement.srcObject = stream;
+                videoElement.style.display = 'block';
+
+                // 4. Load the TensorFlow AI Model (COCO-SSD)
+                // We load it AFTER the button tap so the phone doesn't freeze on initial page load
+                aiModel = await cocoSsd.load();
+                
+                loadingText.style.display = 'none';
+                isDetecting = true;
+                
+                // Start the continuous AI scanning loop
+                detectObjects();
 
             } catch (err) {
+                loadingText.style.display = 'none';
                 errorMsg.style.display = "block";
-                errorMsg.innerHTML = "Error: " + err.message + "<br>Use <strong>https://</strong>";
+                errorMsg.innerHTML = "Error: " + err.message + "<br>Make sure you are using <strong>https://</strong>";
+                console.error(err);
             }
         });
     </script>
