@@ -2,166 +2,111 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Landscape Exact Camera Hand Tracking</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Full Screen Camera Preview</title>
     
-    <!-- MediaPipe Hands CDN Scripts -->
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
-
     <style>
-        body {
+        /* Reset margins and prevent any scrolling */
+        body, html {
             margin: 0;
             padding: 0;
-            background-color: #0b0b0b;
-            font-family: Arial, sans-serif;
-            color: #ffffff;
+            width: 100%;
+            height: 100%;
+            background-color: black;
+            overflow: hidden; 
             display: flex;
-            flex-direction: column;
-            align-items: center;
             justify-content: center;
-            min-height: 100vh;
+            align-items: center;
         }
 
-        h2 {
-            margin: 10px 0;
-            font-size: 1.2rem;
-        }
-
-        /* Landscape container layout */
-        .camera-container {
-            position: relative;
-            width: 90%;
-            max-width: 800px;
-            aspect-ratio: 16 / 9;
-            background: #000;
-            border-radius: 12px;
-            overflow: hidden;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
-        }
-
-        /* Video feed in landscape and exact orientation (transform scaleX removed) */
+        /* Make the video fill the entire viewport edge-to-edge */
         video {
             position: absolute;
             top: 0;
             left: 0;
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
+            width: 100vw;
+            height: 100vh;
+            object-fit: cover; /* Ensures no black borders; fills the screen completely */
+            z-index: 1;
         }
 
-        canvas {
-            display: none;
-        }
-
-        /* Mini screen overlay (Hidden by default until hand is detected) */
-        .info-overlay {
+        /* The UI Button */
+        #start-btn {
             position: absolute;
-            bottom: 15px;
-            left: 15px;
-            background: rgba(0, 0, 0, 0.8);
-            border: 1px solid rgba(0, 255, 204, 0.4);
-            padding: 12px;
-            border-radius: 8px;
-            font-size: 0.85rem;
-            backdrop-filter: blur(4px);
             z-index: 10;
-            display: none; /* Hidden initially */
-            min-width: 200px;
-        }
-
-        .info-title {
+            padding: 20px 40px;
+            font-size: 22px;
+            font-family: Arial, sans-serif;
+            background-color: #00ffcc;
+            color: black;
+            border: none;
+            border-radius: 12px;
             font-weight: bold;
-            color: #00ffcc;
-            margin-bottom: 4px;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
-            padding-bottom: 2px;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(0, 255, 204, 0.5);
         }
 
-        .info-row {
-            display: flex;
-            justify-content: space-between;
-            margin: 2px 0;
+        /* Error Messaging */
+        #error-msg {
+            position: absolute;
+            z-index: 10;
+            color: #ff4444;
+            font-family: Arial, sans-serif;
+            font-size: 18px;
+            text-align: center;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            border-radius: 8px;
+            display: none;
         }
     </style>
 </head>
 <body>
 
-    <h2>Landscape Exact Hand Tracking</h2>
-
-    <div class="camera-container">
-        <video id="webcam" autoplay playsinline></video>
-        <canvas id="output_canvas"></canvas>
-        
-        <!-- Mini popup data screen (Only shows when hand is placed) -->
-        <div id="info-overlay" class="info-overlay">
-            <div class="info-title">Hand Analysis Panel</div>
-            <div class="info-row"><span>Status:</span> <span style="color: #00ffcc;">Hand Detected</span></div>
-            <div class="info-row"><span>Side:</span> <span id="hand-side">-</span></div>
-            <div class="info-row"><span>Fingers Up:</span> <span id="finger-count">-</span></div>
-        </div>
-    </div>
+    <!-- playsinline is crucial for iOS Safari so it doesn't open the native video player -->
+    <video id="camera-feed" autoplay playsinline></video>
+    
+    <button id="start-btn">Tap to Start Camera</button>
+    <div id="error-msg"></div>
 
     <script>
-        const videoElement = document.getElementById('webcam');
-        const infoOverlay = document.getElementById('info-overlay');
-        const handSideText = document.getElementById('hand-side');
-        const fingerCountText = document.getElementById('finger-count');
+        const videoElement = document.getElementById('camera-feed');
+        const startBtn = document.getElementById('start-btn');
+        const errorMsg = document.getElementById('error-msg');
 
-        function onResults(results) {
-            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-                // Show mini screen when hand is present
-                infoOverlay.style.display = "block";
-
-                // Get Handedness (Left or Right)
-                let handednessVal = results.multiHandedness[0].label; 
-                handSideText.innerText = handednessVal;
-
-                const landmarks = results.multiHandLandmarks[0];
-
-                // Calculate extended fingers
-                let fingersUp = 0;
-                const tips = [4, 8, 12, 16, 20]; 
-                const pips = [3, 6, 10, 14, 18]; 
-
-                for (let f = 1; f < 5; f++) {
-                    if (landmarks[tips[f]].y < landmarks[pips[f]].y) {
-                        fingersUp++;
-                    }
-                }
-                fingerCountText.innerText = fingersUp + " approx";
-            } else {
-                // Hide mini screen completely when no hand is placed
-                infoOverlay.style.display = "none";
+        async function startCamera() {
+            try {
+                // Request the mobile device's back camera
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: "environment" } 
+                });
+                videoElement.srcObject = stream;
+            } catch (err) {
+                errorMsg.style.display = "block";
+                errorMsg.innerHTML = "Camera Error: " + err.message + "<br><br>Ensure you are connecting via <strong>https://</strong>";
+                console.error(err);
             }
         }
 
-        const hands = new Hands({
-            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
-        });
+        // Mobile browsers require a physical tap to trigger Fullscreen mode
+        startBtn.addEventListener('click', async () => {
+            // Hide button on click
+            startBtn.style.display = 'none';
+            
+            // 1. Boot up the camera
+            await startCamera();
 
-        hands.setOptions({
-            maxNumHands: 1,
-            modelComplexity: 1,
-            minDetectionConfidence: 0.5,
-            minTrackingConfidence: 0.5
-        });
-
-        hands.onResults(onResults);
-
-        const camera = new Camera(videoElement, {
-            onFrame: async () => {
-                await hands.send({image: videoElement});
-            },
-            width: 1280,
-            height: 720,
-            facingMode: "environment"
-        });
-
-        camera.start().catch(err => {
-            alert("Camera initialization error. Please check permissions or run via localhost/HTTPS.");
+            // 2. Request immersive full screen (hides browser UI)
+            try {
+                const docElm = document.documentElement;
+                if (docElm.requestFullscreen) {
+                    await docElm.requestFullscreen();
+                } else if (docElm.webkitRequestFullscreen) { /* iOS Safari support */
+                    await docElm.webkitRequestFullscreen();
+                }
+            } catch (err) {
+                console.warn("Fullscreen API is not supported on this browser.", err);
+            }
         });
     </script>
 </body>
