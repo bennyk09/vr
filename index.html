@@ -3,113 +3,61 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Dual Hand AR Tracker</title>
+    <title>Dual Hand AR Tracker - Optimized</title>
     
     <!-- MediaPipe Hands CDN Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
 
     <style>
-        /* Reset margins and prevent scrolling */
         body, html {
-            margin: 0;
-            padding: 0;
-            width: 100%;
-            height: 100%;
-            background-color: black;
-            overflow: hidden; 
-            display: flex;
-            justify-content: center;
-            align-items: center;
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            background-color: black; overflow: hidden; 
+            display: flex; justify-content: center; align-items: center;
             font-family: Arial, sans-serif;
         }
 
-        /* True Fullscreen Video (Unmirrored) */
         video {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
-            object-fit: cover;
-            z-index: 1;
-            display: none; /* Hidden until started */
+            position: absolute; top: 0; left: 0; width: 100vw; height: 100vh;
+            object-fit: cover; z-index: 1; display: none; 
         }
 
-        /* The UI Start Button */
         #start-btn {
-            position: absolute;
-            z-index: 20;
-            padding: 20px 40px;
-            font-size: 22px;
-            background-color: #00ffcc;
-            color: black;
-            border: none;
-            border-radius: 12px;
-            font-weight: bold;
-            cursor: pointer;
-            box-shadow: 0 4px 15px rgba(0, 255, 204, 0.5);
+            position: absolute; z-index: 20; padding: 20px 40px; font-size: 22px;
+            background-color: #00ffcc; color: black; border: none; border-radius: 12px;
+            font-weight: bold; cursor: pointer; box-shadow: 0 4px 15px rgba(0, 255, 204, 0.5);
         }
 
-        /* AI HUD (Heads Up Display) Panel */
         #hud-panel {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            z-index: 10;
-            background: rgba(0, 0, 0, 0.7);
-            border: 2px solid #00ffcc;
-            padding: 15px;
-            border-radius: 10px;
-            color: white;
-            backdrop-filter: blur(5px);
-            display: none; /* Hidden until AI detects hands */
-            min-width: 200px;
+            position: absolute; top: 20px; left: 20px; z-index: 10;
+            background: rgba(0, 0, 0, 0.7); border: 2px solid #00ffcc;
+            padding: 15px; border-radius: 10px; color: white;
+            backdrop-filter: blur(5px); display: none; min-width: 200px;
         }
 
         .hud-title {
-            font-size: 18px;
-            font-weight: bold;
-            color: #00ffcc;
-            margin-bottom: 10px;
-            border-bottom: 1px solid rgba(255,255,255,0.2);
-            padding-bottom: 5px;
+            font-size: 18px; font-weight: bold; color: #00ffcc; margin-bottom: 10px;
+            border-bottom: 1px solid rgba(255,255,255,0.2); padding-bottom: 5px;
         }
 
-        .hand-data {
-            margin-bottom: 8px;
-            font-size: 16px;
-        }
+        .hand-data { margin-bottom: 8px; font-size: 16px; }
+        .hand-data span { font-weight: bold; color: #ffcc00; }
 
-        .hand-data span {
-            font-weight: bold;
-            color: #ffcc00; /* Yellow for the data values */
-        }
-
-        /* Error Messaging */
         #error-msg {
-            position: absolute;
-            z-index: 25;
-            color: #ff4444;
-            font-size: 18px;
-            text-align: center;
-            background: rgba(0, 0, 0, 0.9);
-            padding: 15px;
-            border-radius: 8px;
-            display: none;
+            position: absolute; z-index: 25; color: #ff4444; font-size: 18px;
+            text-align: center; background: rgba(0, 0, 0, 0.9);
+            padding: 15px; border-radius: 8px; display: none;
         }
     </style>
 </head>
 <body>
 
     <video id="camera-feed" autoplay playsinline></video>
-    
     <button id="start-btn">Tap to Start AI Camera</button>
     
-    <!-- The Live Data Overlay -->
     <div id="hud-panel">
         <div class="hud-title">AI System Active</div>
-        <div id="hand-list"></div> <!-- JavaScript injects hand data here -->
+        <div id="hand-list"></div>
     </div>
 
     <div id="error-msg"></div>
@@ -121,55 +69,56 @@
         const hudPanel = document.getElementById('hud-panel');
         const handList = document.getElementById('hand-list');
 
-        // --- 1. THE AI PROCESSING LOOP ---
         function onResults(results) {
-            // Clear previous data
             handList.innerHTML = ""; 
 
             if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-                // Show the HUD panel
                 hudPanel.style.display = "block";
 
-                // Loop through every hand detected (up to 2)
                 for (let i = 0; i < results.multiHandLandmarks.length; i++) {
                     const landmarks = results.multiHandLandmarks[i];
                     
-                    // Get Left or Right label. 
-                    // Note: Back cameras sometimes invert Left/Right labels in MediaPipe depending on the device.
-                    const handSide = results.multiHandedness[i].label;
+                    // --- FIX 1: INVERT LEFT AND RIGHT ---
+                    let rawSide = results.multiHandedness[i].label;
+                    let handSide = (rawSide === "Left") ? "Right" : "Left";
 
-                    // Calculate extended fingers
                     let fingersUp = 0;
-                    const tips = [4, 8, 12, 16, 20]; 
-                    const pips = [3, 6, 10, 14, 18]; 
 
-                    for (let f = 1; f < 5; f++) {
-                        // If the finger tip is higher (lower Y value) than the knuckle
+                    // --- FIX 2: THUMB DETECTION (Uses X-axis) ---
+                    // On a back camera, a right hand's thumb points left (lower X value)
+                    // A left hand's thumb points right (higher X value)
+                    if (handSide === "Right") {
+                        if (landmarks[4].x < landmarks[3].x) fingersUp++;
+                    } else {
+                        if (landmarks[4].x > landmarks[3].x) fingersUp++;
+                    }
+
+                    // --- OTHER 4 FINGERS (Uses Y-axis) ---
+                    const tips = [8, 12, 16, 20]; // Index, Middle, Ring, Pinky Tips
+                    const pips = [6, 10, 14, 18]; // Index, Middle, Ring, Pinky Knuckles
+
+                    for (let f = 0; f < 4; f++) {
                         if (landmarks[tips[f]].y < landmarks[pips[f]].y) {
                             fingersUp++;
                         }
                     }
 
-                    // Create the HTML for this hand and inject it into the HUD
-                    const handHTML = `
+                    // Output to HUD
+                    handList.innerHTML += `
                         <div class="hand-data">
-                            Hand ${i + 1} (${handSide}): <span>${fingersUp} Fingers</span>
+                            ${handSide} Hand: <span>${fingersUp} Fingers</span>
                         </div>
                     `;
-                    handList.innerHTML += handHTML;
                 }
             } else {
-                // Hide HUD if no hands are visible to keep the screen clean
                 hudPanel.style.display = "none"; 
             }
         }
 
-        // Initialize MediaPipe Hands
         const hands = new Hands({
             locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
         });
 
-        // Configure AI (Set to max 2 hands, Lite model for mobile speed)
         hands.setOptions({
             maxNumHands: 2,
             modelComplexity: 0, 
@@ -179,46 +128,36 @@
 
         hands.onResults(onResults);
 
-        // --- 2. THE CAMERA & FULLSCREEN LOGIC ---
         startBtn.addEventListener('click', async () => {
             try {
-                // Request Immersive Full Screen
                 const docElm = document.documentElement;
-                if (docElm.requestFullscreen) {
-                    await docElm.requestFullscreen();
-                } else if (docElm.webkitRequestFullscreen) { 
-                    await docElm.webkitRequestFullscreen();
-                }
+                if (docElm.requestFullscreen) await docElm.requestFullscreen();
+                else if (docElm.webkitRequestFullscreen) await docElm.webkitRequestFullscreen();
 
-                // Lock Screen to Landscape
                 if (screen.orientation && screen.orientation.lock) {
-                    try {
-                        await screen.orientation.lock('landscape');
-                    } catch (err) {
-                        console.warn("Orientation lock not supported.", err);
-                    }
+                    try { await screen.orientation.lock('landscape'); } 
+                    catch (err) { console.warn("Orientation lock failed.", err); }
                 }
 
-                // Start the Camera via MediaPipe's Camera Utility
+                // --- FIX 3: LOWER AI RESOLUTION FOR SPEED ---
+                // Lowering the width/height here speeds up the AI drastically on mobile
                 const camera = new Camera(videoElement, {
                     onFrame: async () => {
                         await hands.send({image: videoElement});
                     },
-                    width: 640,
-                    height: 480,
-                    facingMode: "environment" // True back camera
+                    width: 320,  // Changed from 640
+                    height: 240, // Changed from 480
+                    facingMode: "environment" 
                 });
 
                 await camera.start();
                 
-                // Reveal the video and hide the start button
                 videoElement.style.display = 'block'; 
                 startBtn.style.display = 'none';
 
             } catch (err) {
                 errorMsg.style.display = "block";
-                errorMsg.innerHTML = "Error: " + err.message + "<br>Make sure you are using <strong>https://</strong>";
-                console.error(err);
+                errorMsg.innerHTML = "Error: " + err.message + "<br>Use <strong>https://</strong>";
             }
         });
     </script>
